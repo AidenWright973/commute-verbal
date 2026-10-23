@@ -73,6 +73,11 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .plan-list span{font-size:.78rem;color:var(--muted);line-height:1.3}
 .plan-list .k-weak b{color:var(--r5)}.plan-list .k-rev b{color:var(--accent)}.plan-list .k-new b{color:var(--go)}
 .gate{font-size:.88rem;background:color-mix(in srgb,var(--signal) 15%,transparent);border-radius:12px;padding:10px 12px;margin:0}
+.ridepick{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.stepper button{border:0;border-radius:0;min-height:42px;min-width:44px;padding:0;font-size:1.2rem}
+.stepper input{width:64px;border:0;border-inline:1px solid var(--line);text-align:center;min-height:42px;background:var(--panel);font-family:var(--mono);font-variant-numeric:tabular-nums}
+.loopsum{background:var(--accent-soft);border-radius:12px;padding:12px 14px;font-size:.92rem;margin:0}
 .startrow{display:grid;grid-template-columns:1fr;gap:8px}
 .hf{min-height:60px;font-size:1.08rem;display:flex;align-items:center;justify-content:center;gap:10px}
 .hf .ico{width:22px;height:22px}
@@ -149,6 +154,9 @@ body.riding .word{font-size:clamp(2.6rem,13vw,4rem)}
 .chips button .n{font-family:var(--mono);font-size:.72rem;opacity:.75;margin-left:4px}
 .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;flex-wrap:wrap;background:var(--panel)}
 .seg button{border:0;border-radius:0;min-height:40px;padding:8px 11px;font-size:.86rem;font-weight:500;flex:1}
+.seg button{white-space:nowrap}
+.row:has(> .seg){flex-direction:column;align-items:stretch;gap:6px}
+.row:has(> .seg) > span{font-weight:500}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .quick{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
@@ -268,6 +276,14 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
         <li class="k-new"><b id="pNew">0</b><span>new words</span></li>
       </ul>
       <p class="gate" id="pGate" hidden></p>
+      <div class="ridepick" id="ridePick">
+        <div class="row"><span class="cap">This ride</span><span class="mono" id="rideEst"></span></div>
+        <div class="chips" id="rideLen">
+          <button data-v="10">10 words</button><button data-v="20">20</button><button data-v="30">30</button><button data-v="50">50</button><button data-v="all">All due</button>
+          <button data-v="t10">10 min</button><button data-v="t20">20 min</button><button data-v="t30">30 min</button><button data-v="custom">Custom</button>
+        </div>
+        <div class="row" id="customRow" hidden><label for="customN">Words this ride</label><span class="stepper"><button id="cMinus" aria-label="Fewer">−</button><input id="customN" type="number" inputmode="numeric" min="1" max="300"><button id="cPlus" aria-label="More">+</button></span></div>
+      </div>
       <div class="startrow" id="startRow">
         <button class="btn-go hf" id="hfBtn"><svg class="ico"><use href="#i-mic"/></svg><span id="hfTxt">Start hands-free ride</span></button>
         <button id="tapStart"><span id="tapTxt">Start without voice</span></button>
@@ -389,10 +405,23 @@ nav.tabs button[aria-selected="true"]{color:var(--accent)}
   <!-- SETTINGS -->
   <section data-view="settings" hidden>
     <div class="card stack">
-      <h3>Daily plan</h3>
-      <div class="row"><span>New words per day</span><div class="seg" data-set="newDay"><button data-v="0">0</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button><button data-v="30">30</button></div></div>
+      <h3>Your loop</h3>
+      <p class="note">How weak words cycle back and how fast new words come in. Pick a preset or tune each part.</p>
+      <div class="seg" id="presetSeg"><button data-v="light">Light</button><button data-v="standard">Standard</button><button data-v="intense">Intense</button><button data-v="custom" disabled>Custom</button></div>
+      <p class="loopsum" id="loopSum"></p>
+      <div class="row"><span>Weak words come back</span><div class="seg" data-set="ret"><button data-v="1">Every day</button><button data-v="2">Every 2 days</button></div></div>
+      <div class="row"><span>Counts as weak</span><div class="seg" data-set="weak3"><button data-v="0">4–5</button><button data-v="1">3–5</button></div></div>
+      <div class="row"><span>Strong days to graduate</span><div class="seg" data-set="grad"><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button></div></div>
+      <div class="row"><span>Extra looks at a miss, same ride</span><div class="seg" data-set="reps"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button></div></div>
+      <div class="row"><span>Spacing once graduated</span><div class="seg" data-set="space"><button data-v="0.8">Tighter</button><button data-v="1">Normal</button><button data-v="1.3">Wider</button></div></div>
+      <div class="row"><span>New words per day</span><div class="seg" data-set="newDay"><button data-v="0">0</button><button data-v="5">5</button><button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button><button data-v="30">30</button></div></div>
       <div class="row"><span>Pause new words at</span><div class="seg" data-set="weakCap"><button data-v="25">25 weak</button><button data-v="40">40</button><button data-v="60">60</button><button data-v="9999">Never</button></div></div>
-      <div class="row"><span>Words per ride</span><div class="seg" data-set="size"><button data-v="15">15</button><button data-v="25">25</button><button data-v="40">40</button><button data-v="60">60</button></div></div>
+      <p class="note">Changes apply to your next rating. Words already scheduled keep their dates.</p>
+    </div>
+    <div class="card stack">
+      <h3>Rides</h3>
+      <div class="row"><span>Default ride length</span><span class="mono" id="defRide"></span></div>
+      <p class="note">Set it on the Today screen before each ride; the app remembers your last choice.</p>
       <div class="row"><span>Direction</span><div class="seg" data-set="dir"><button data-v="w2d">Word → meaning</button><button data-v="d2w">Meaning → word</button><button data-v="mix">Mix</button></div></div>
     </div>
     <div class="card stack">
@@ -446,9 +475,13 @@ function toast(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTim
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 /* ================= settings ================= */
-const S=Object.assign({size:25,newDay:15,weakCap:40,dir:"w2d",pause:5,rate:0.9,sayEx:"1",sayHook:"1",auto:"0",echo:"1",voice:"",mic:false,intro:1},LS.get("cv2_settings",{}));
+const S=Object.assign({size:25,rideLen:"20",grad:2,weak3:"0",ret:1,reps:2,space:1,newDay:15,weakCap:40,dir:"w2d",pause:5,rate:0.9,sayEx:"1",sayHook:"1",auto:"0",echo:"1",voice:"",mic:false,intro:1},LS.get("cv2_settings",{}));
 if(S.newPer!=null&&S.newDay==null)S.newDay=20;
+if(S.rideLen==null)S.rideLen=String(S.size||20);
 function saveS(){LS.set("cv2_settings",S)}
+const PRESETS={light:{grad:2,weak3:"0",ret:2,reps:1,space:1.3,newDay:10,weakCap:25},standard:{grad:2,weak3:"0",ret:1,reps:2,space:1,newDay:15,weakCap:40},intense:{grad:3,weak3:"1",ret:1,reps:2,space:.8,newDay:20,weakCap:60}};
+const LOOPKEYS=["grad","weak3","ret","reps","space","newDay","weakCap"];
+function presetName(){for(const [k,p] of Object.entries(PRESETS))if(LOOPKEYS.every(x=>String(p[x])===String(S[x])))return k;return "custom"}
 
 /* ================= progress store =================
  P.w[word] = {r:last rating, h:history, due:ts, iv:interval days, ef:ease,
@@ -490,21 +523,22 @@ async function initCloud(){if(!window.claude||!window.claude.use)return;
 function rate(w,r){
   const now=NOW(),x={...blank(),...(P.w[w]||{})};const day=dayRec();
   const firstEver=!x.r;const sameDay=x.r&&dkey(x.t)===dkey(now);
+  const ret=+S.ret||1,grad=+S.grad||2,sp=+S.space||1,weakAt=S.weak3==="1"?3:4,soon=+S.reps>0;
   if(firstEver)day.nw++;
   if(sameDay){
-    // already rated today: a miss sends it to tomorrow (in-ride repeats already gave extra looks); never loops all day
-    if(r>=4){if(x.gr&&x.r<4){x.gr=0;x.g=0;x.iv=0;x.L++}else x.g=0;x.due=dayAt(1)}
-    else if(x.due<=now+11*MIN)x.due=dayAt(1); // a word you missed earlier today, now remembered: see it tomorrow
+    // already rated today: a miss waits for the next loop day (the ride already gave extra looks); never loops all day
+    if(r>=weakAt){if(x.gr&&x.r<weakAt){x.gr=0;x.g=0;x.iv=0;if(r>=4)x.L++}else x.g=0;x.due=dayAt(ret)}
+    else if(x.due<=now+11*MIN)x.due=dayAt(ret);
   }else if(!x.gr){
-    if(r===5){x.g=0;x.due=now+10*MIN;x.ef=Math.max(1.3,x.ef-.15)}
-    else if(r===4){x.g=0;x.due=dayAt(1);x.ef=Math.max(1.3,x.ef-.1)}
-    else if(r===3){x.due=dayAt(1)}
-    else{x.g+=r===1?2:1;if(x.g>=2){x.gr=1;x.iv=r===1?(firstEver?4:5):4;x.due=dayAt(x.iv)}else x.due=dayAt(1)}
+    if(r===5){x.g=0;x.due=soon?now+10*MIN:dayAt(ret);x.ef=Math.max(1.3,x.ef-.15)}
+    else if(r>=weakAt){x.g=0;x.due=dayAt(ret);x.ef=Math.max(1.3,x.ef-.1)}
+    else if(r===3){x.due=dayAt(ret)}
+    else{x.g+=r===1?2:1;if(x.g>=grad){x.gr=1;x.iv=Math.max(1,Math.round((r===1?(firstEver?4:5):4)*sp));x.due=dayAt(x.iv)}else x.due=dayAt(ret)}
   }else{
-    if(r>=4){x.L++;x.gr=0;x.g=0;x.iv=0;x.ef=Math.max(1.3,x.ef-.2);x.due=r===5?now+10*MIN:dayAt(1)}
-    else{if(r===3){x.iv=Math.max(2,Math.round(x.iv*1.2));x.ef=Math.max(1.3,x.ef-.15)}
-      else if(r===2)x.iv=Math.max(x.iv+1,Math.round(x.iv*x.ef));
-      else{x.iv=Math.max(x.iv+2,Math.round(x.iv*x.ef*1.3));x.ef=Math.min(3,x.ef+.1)}
+    if(r>=weakAt){if(r>=4)x.L++;x.gr=0;x.g=0;x.iv=0;x.ef=Math.max(1.3,x.ef-.2);x.due=r===5&&soon?now+10*MIN:dayAt(ret)}
+    else{if(r===3){x.iv=Math.max(2,Math.round(x.iv*1.2*sp));x.ef=Math.max(1.3,x.ef-.15)}
+      else if(r===2)x.iv=Math.max(x.iv+1,Math.round(x.iv*x.ef*sp));
+      else{x.iv=Math.max(x.iv+2,Math.round(x.iv*x.ef*1.3*sp));x.ef=Math.min(3,x.ef+.1)}
       x.iv=Math.min(x.iv,180);x.due=dayAt(x.iv)}
   }
   x.r=r;x.h=(x.h+r).slice(-30);x.t=now;x.ef=+x.ef.toFixed(2);
@@ -528,7 +562,7 @@ function plan(){
   const doneToday=WORDS.filter(x=>{const r=rec(x.w);return r&&r.r&&dkey(r.t)===dkey()}).length;
   return {learnDue,revDue,learning,gateOpen,newLeft,unseen,doneToday}}
 function buildRide(){
-  const p=plan();const size=+S.size;
+  const p=plan();const L=String(S.rideLen);const size=/^\d+$/.test(L)?+L:100000;
   const weak=p.learnDue.sort((a,b)=>(rec(b.w).r-rec(a.w).r)||(rec(a.w).due-rec(b.w).due));
   const rev=p.revDue.sort((a,b)=>{const A=rec(a.w),B=rec(b.w);return (NOW()-B.due)/Math.max(1,B.iv)-(NOW()-A.due)/Math.max(1,A.iv)});
   const nw=p.unseen.slice(0,p.newLeft);
@@ -538,7 +572,7 @@ function buildRide(){
   // weak words first (yesterday's misses while you're fresh), then reviews with a new word every few cards
   const mix=[];let i=0,j=0;const step=nn.length?Math.max(1,Math.round(rv.length/nn.length)):0;
   while(i<rv.length||j<nn.length){for(let k=0;k<step&&i<rv.length;k++)mix.push(rv[i++]);if(j<nn.length)mix.push(nn[j++]);if(!step)while(i<rv.length)mix.push(rv[i++])}
-  Q=[...shuffle(q),...mix];qi=0;mode="plan";label="";reinserts={};
+  Q=[...shuffle(q),...mix];qi=0;mode="plan";label="";reinserts={};rideAcc=0;segStart=0;timeUp=false;
 }
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 
@@ -615,6 +649,9 @@ function micCheck(then){
 $("micBtn").onclick=()=>{if(S.mic){S.mic=false;saveS();syncMic();killRec();toast("Voice answers off");return}if(running)stop();micCheck(()=>toast("Voice answers on — say 1 to 5 after the beep"))};
 
 /* ================= ride engine ================= */
+let rideAcc=0,segStart=0,timeUp=false;
+const rideLimitMs=()=>/^t(\d+)$/.test(String(S.rideLen))?+String(S.rideLen).slice(1)*MIN:0;
+const rideElapsed=()=>rideAcc+(segStart?NOW()-segStart:0);
 let Q=[],qi=0,running=false,tok=0,mode="plan",label="",current=null,awaiting=null,reinserts={},cardDir="w2d",rideStart=0,pdir="w2d",voicePaused=false;
 function dirFor(){const d=mode==="plan"?S.dir:pdir;return d==="mix"?(Math.random()<.5?"w2d":"d2w"):d}
 function kindOf(x){const r=rec(x.w);if(!r||!r.r)return ["New","k-new"];if((r.L||0)>=3)return ["Trouble","k-trouble"];if(!r.gr)return ["Weak","k-weak"];return ["Review","k-rev"]}
@@ -658,6 +695,7 @@ async function getRating(t){
 async function loop(){const t=++tok;
   try{while(running&&t===tok){
     if(qi>=Q.length){finish();break}
+    if(mode==="plan"&&rideLimitMs()&&rideElapsed()>=rideLimitMs()){timeUp=true;finish();break}
     await playCard(t);let ans=await getRating(t);
     for(;;){if(ans==="repeat"){await playCard(t);ans=await getRating(t);continue}
       if(ans==="star"){const on=!(rec(current.w)||{}).s;toggleStar(current.w);renderCard(false);await say(on?"Starred. Now rate it.":"Unstarred. Now rate it.",t);ans=await getRating(t);continue}
@@ -671,16 +709,17 @@ async function loop(){const t=++tok;
 function applyRating(r){const x=current;if(!x)return;const wasNew=!seen(x);rate(x.w,r);
   // learning steps inside the ride: misses come back a few cards later, a shaky new word once more
   const n=reinserts[x.w]||0;
-  if(r===5&&n<2){Q.splice(Math.min(Q.length,qi+4),0,x);reinserts[x.w]=n+1}
-  else if(r===4&&n<1){Q.splice(Math.min(Q.length,qi+7),0,x);reinserts[x.w]=n+1}
-  else if(r===3&&wasNew&&n<1){Q.splice(Math.min(Q.length,qi+10),0,x);reinserts[x.w]=n+1}
+  const reps=+S.reps;
+  if(r===5&&n<reps){Q.splice(Math.min(Q.length,qi+4),0,x);reinserts[x.w]=n+1}
+  else if(r===4&&n<Math.min(1,reps)){Q.splice(Math.min(Q.length,qi+7),0,x);reinserts[x.w]=n+1}
+  else if(r===3&&wasNew&&n<Math.min(1,reps)){Q.splice(Math.min(Q.length,qi+10),0,x);reinserts[x.w]=n+1}
   qi++;renderCard(true)}
 async function resumeListener(){voicePaused=true;let n=0;
   while(voicePaused&&!running&&S.mic&&micState!=="blocked"){const v=await listen(8000);if(!voicePaused||running)break;if(v==="resume"){voicePaused=false;start();return}if(++n%4===0)await speakRaw("Say resume when you're ready.")}
   voicePaused=false}
-function finish(){running=false;tickTime();phase("Done",false);setRiding(false);refreshAll();
+function finish(){if(segStart){rideAcc+=NOW()-segStart;segStart=0}running=false;tickTime();phase("Done",false);setRiding(false);refreshAll();
   const p=plan();const left=p.learnDue.length+p.revDue.length+p.newLeft;const td=dayRec().n;
-  const msg=mode==="plan"?(left?`Ride complete. ${td} words today, ${left} left in today's plan.`:`Ride complete. Today's plan is done. ${td} words today.`):`Practice complete. ${td} words today.`;
+  const msg=mode==="plan"?(left?`${timeUp?"Time's up. ":""}Ride complete. ${td} words today, ${left} left in today's plan.`:`${timeUp?"Time's up. ":""}Ride complete. Today's plan is done. ${td} words today.`):`Practice complete. ${td} words today.`;
   if(S.mic&&micState!=="blocked"){speakRaw(msg+(left&&mode==="plan"?" Say another to keep going, or stop.":"")).then(async()=>{if(!left||mode!=="plan"){keepAwake(false);return}
     for(let i=0;i<3&&!running;i++){beep("listen");const v=await listen(7000);if(running)return;if(v==="resume"){startPlan();return}if(v==="pause")break}keepAwake(false)})}
   else{speakRaw(msg);keepAwake(false)}}
@@ -690,9 +729,9 @@ function tickTime(){if(rideStart){dayRec().ms+=NOW()-rideStart;rideStart=running
 function setRiding(on){document.body.classList.toggle("riding",on);$("playIco").innerHTML=on?'<use href="#i-pause"/>':'<use href="#i-play"/>';$("playTxt").textContent=on?"Pause":(qi>0&&qi<Q.length?"Resume":"Start");$("play").setAttribute("aria-label",on?"Pause":"Play")}
 function start(){unlockAudio();voicePaused=false;killRec();
   if(qi>=Q.length||!Q.length){if(mode!=="plan"){exitPractice(true)}buildRide();renderCard(true);if(!Q.length){refreshPlan();toast("Nothing left today. Try Practice.");return}}
-  running=true;rideStart=NOW();setRiding(true);keepAwake(true);showTab("today");window.scrollTo(0,0);loop()}
+  running=true;rideStart=NOW();segStart=NOW();setRiding(true);keepAwake(true);showTab("today");window.scrollTo(0,0);loop()}
 function startPlan(){if(mode!=="plan"||qi>=Q.length||!Q.length){exitPractice(true);buildRide();renderCard(true)}if(!Q.length){refreshPlan();toast("Nothing left in today's plan.");return}start()}
-function stop(){running=false;tok++;killRec();synth&&synth.cancel();if(awaiting){awaiting("stop");awaiting=null}$("rates").classList.remove("await");setListening(false);tickTime();phase("Paused",false);setRiding(false);keepAwake(false);refreshPlan()}
+function stop(){if(segStart){rideAcc+=NOW()-segStart;segStart=0}running=false;tok++;killRec();synth&&synth.cancel();if(awaiting){awaiting("stop");awaiting=null}$("rates").classList.remove("await");setListening(false);tickTime();phase("Paused",false);setRiding(false);keepAwake(false);refreshPlan()}
 $("play").onclick=()=>{if(running){stop();return}if(mode==="plan"&&(qi>=Q.length||!Q.length))startPlan();else start()};
 const go=()=>mode==="plan"?startPlan():start();
 $("hfBtn").onclick=()=>{if(running)stop();micCheck(()=>speakRaw(qi>0&&qi<Q.length?"Resuming.":"Hands-free on. After each definition and the beep, say a number, one to five.").then(()=>{if(!running)go()}))};
@@ -730,6 +769,7 @@ function refreshPlan(){
   $("hfTxt").textContent=prac?(mid?"Resume practice hands-free":"Start practice hands-free"):(mid?"Resume hands-free":"Start hands-free ride");
   $("tapTxt").textContent=prac?(mid?"Resume practice without voice":"Start practice without voice"):(mid?"Resume without voice":"Start without voice");
   $("extraNew").hidden=!p.unseen.length;
+  $("ridePick").hidden=finished||mode!=="plan"||(qi>0&&qi<Q.length);renderRidePick();
   const b=$("banner");if(mode!=="plan"){b.hidden=false;$("bannerText").textContent=label}else b.hidden=true;
   refreshHeader()}
 $("extraWeak").onclick=()=>{const pool=WORDS.filter(x=>seen(x)&&!isArch(x)).sort((a,b)=>weakScore(b)-weakScore(a)).slice(0,20);if(!pool.length){toast("Rate some words first");return}startPractice(pool,"Weakest 20","w2d","weak",true)};
@@ -839,12 +879,40 @@ $("resetBtn").onclick=()=>{$("resetConfirm").hidden=false};
 $("resetConfirm").onclick=()=>{P={v:3,w:{},days:{}};persist();pushRemote();$("resetConfirm").hidden=true;if(running)stop();mode="plan";buildRide();renderCard(true);refreshAll();toast("All progress erased")};
 
 /* ================= settings ================= */
-document.querySelectorAll(".seg[data-set]").forEach(el=>{const k=el.dataset.set;segOne(el,()=>S[k],v=>{S[k]=["pause","size","newDay","weakCap"].includes(k)?+v:v;saveS();
-  if(["size","newDay","weakCap"].includes(k)&&!running&&mode==="plan"){buildRide();renderCard(true)}refreshPlan()})});
+document.querySelectorAll(".seg[data-set]").forEach(el=>{const k=el.dataset.set;segOne(el,()=>S[k],v=>{S[k]=["pause","size","newDay","weakCap","grad","ret","reps","space"].includes(k)?+v:v;saveS();
+  if(["newDay","weakCap"].includes(k)){const d=dayRec();d.gate=null}
+  if(["size","newDay","weakCap"].includes(k)&&!running&&mode==="plan"&&qi===0){buildRide();renderCard(true)}refreshPlan();renderLoop()})});
+
+/* ================= loop + ride length ================= */
+function renderLoop(){const name=presetName();
+  document.querySelectorAll("#presetSeg button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===name)));
+  document.querySelectorAll(".seg[data-set]").forEach(el=>{const k=el.dataset.set;el.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",String(String(b.dataset.v)===String(S[k]))))});
+  const ret=+S.ret===1?"every day":"every other day",weak=S.weak3==="1"?"3, 4 or 5":"4 or 5",g=+S.grad;
+  const first=Math.max(1,Math.round(4*S.space)),second=Math.round(first*2.5*S.space),third=Math.round(second*2.5*S.space);
+  const reps=+S.reps?`During a ride, a blank comes back ${+S.reps===1?"once":"up to twice"} a few cards later. `:"";
+  const cap=+S.weakCap>=9999?"":` New words pause on any morning your weak list is over ${S.weakCap}.`;
+  $("loopSum").textContent=`A word you rate ${weak} comes back ${ret} until you rate it 1–2 on ${g===1?"one day":g+" different days"}. Then it returns in about ${first} days, then ${second}, then ${third}. ${reps}You get ${S.newDay} new word${+S.newDay===1?"":"s"} a day.${cap}`;
+  $("defRide").textContent=rideLabel()}
+$("presetSeg").onclick=e=>{const b=e.target.closest("button");if(!b||b.dataset.v==="custom")return;Object.assign(S,PRESETS[b.dataset.v]);saveS();dayRec().gate=null;
+  if(!running&&mode==="plan"&&qi===0){buildRide();renderCard(true)}renderLoop();refreshPlan();toast(b.textContent+" loop on")};
+function rideLabel(){const L=String(S.rideLen);if(L==="all")return "All due";if(L[0]==="t")return L.slice(1)+" min";return L+" words"}
+function perCardSec(){return (1.2+ +S.pause+3.5+(S.sayEx==="1"?3:0)+(S.sayHook==="0"?0:3.5)+2.5)/(+S.rate||1)}
+function renderRidePick(){const L=String(S.rideLen),std=["10","20","30","50","all","t10","t20","t30"].includes(L);
+  document.querySelectorAll("#rideLen button").forEach(b=>b.setAttribute("aria-pressed",String(std?b.dataset.v===L:b.dataset.v==="custom")));
+  $("customRow").hidden=std;if(!std)$("customN").value=L;
+  const p=plan();const avail=p.learnDue.length+p.revDue.length+p.newLeft;
+  let txt;if(L[0]==="t")txt=`stops after ${L.slice(1)} min · ~${Math.round(+L.slice(1)*60/perCardSec())} words`;
+  else{const n=L==="all"?avail:Math.min(+L,avail);txt=`${n} word${n===1?"":"s"} · ~${Math.max(1,Math.round(n*1.3*perCardSec()/60))} min`}
+  $("rideEst").textContent=avail?txt:""}
+$("rideLen").onclick=e=>{const b=e.target.closest("button");if(!b)return;const v=b.dataset.v;
+  if(v==="custom"){S.rideLen=String(Math.max(1,+$("customN").value||(/^\d+$/.test(String(S.rideLen))?S.rideLen:25)));if(["10","20","30","50"].includes(S.rideLen))S.rideLen=String(+S.rideLen+5)}else S.rideLen=v;
+  saveS();if(!running&&mode==="plan"&&(qi===0||qi>=Q.length)){buildRide();renderCard(true)}renderRidePick();renderLoop()};
+function setCustom(n){n=Math.max(1,Math.min(300,Math.round(n)||1));S.rideLen=String(n);saveS();$("customN").value=n;if(!running&&mode==="plan"&&(qi===0||qi>=Q.length)){buildRide();renderCard(true)}renderRidePick()}
+$("customN").onchange=e=>setCustom(+e.target.value);$("cMinus").onclick=()=>setCustom(+$("customN").value-5);$("cPlus").onclick=()=>setCustom(+$("customN").value+5);
 
 /* ================= tabs & refresh ================= */
 function showTab(name){document.querySelectorAll("[data-view]").forEach(s=>s.hidden=s.dataset.view!==name);document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.tab===name)));
-  if(name==="words")renderList();if(name==="progress")renderProgress();if(name==="practice"){renderStatusChips();countPractice();renderQuick();renderSets()}if(name==="today")refreshPlan();try{window.scrollTo(0,0)}catch(e){}}
+  if(name==="words")renderList();if(name==="progress")renderProgress();if(name==="practice"){renderStatusChips();countPractice();renderQuick();renderSets()}if(name==="today")refreshPlan();if(name==="settings")renderLoop();try{window.scrollTo(0,0)}catch(e){}}
 document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 function refreshHeader(){const p=plan();const left=p.learnDue.length+p.revDue.length+p.newLeft;$("hdr").textContent=left?`${left} left today`:"Plan done ✓"}
 function refreshAll(){if(!running&&mode==="plan"&&qi===0){buildRide();renderCard(true)}refreshPlan();const v=document.querySelector("[data-view]:not([hidden])").dataset.view;if(v==="words")renderList();if(v==="progress")renderProgress();if(v==="practice"){renderStatusChips();countPractice();renderQuick();renderSets()}}
@@ -855,7 +923,7 @@ syncMic();if(!SR)micState="unsupported";
 $("intro").hidden=!S.intro;
 buildRide();
 if(Q.length){current=Q[0];cardDir=S.dir==="d2w"?"d2w":"w2d";renderCard(false);phase("Ready",false)}else renderCard(true);
-refreshPlan();setRiding(false);
+refreshPlan();setRiding(false);renderLoop();
 initCloud();
 </script>
 
