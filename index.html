@@ -68,6 +68,7 @@ button:disabled{opacity:.45;cursor:default}
 .concealed .ans{visibility:hidden}
 .timer{height:4px;background:var(--line);border-radius:2px;overflow:hidden;margin-top:auto}
 .timer i{display:block;height:100%;width:0;background:var(--signal)}
+.hf{width:100%;min-height:62px;font-size:1.1rem;font-weight:700;background:var(--r1);border-color:var(--r1);color:var(--panel)}
 .controls{display:grid;grid-template-columns:1fr 1fr 1.5fr 1fr;gap:8px}
 .controls button{font-size:.92rem;padding:10px 6px}
 .rates{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
@@ -178,6 +179,7 @@ nav.tabs button[aria-selected="true"]{color:var(--track)}
       <div class="hook ans" id="hookBox"><span class="cap">Memory hook</span><span id="hook"></span></div>
       <div class="timer"><i id="bar"></i></div>
     </article>
+    <button id="hfBtn" class="hf">🎙 Start hands-free ride</button>
     <div class="controls">
       <button id="back" aria-label="Previous word">◀ Back</button>
       <button id="repeat">↻ Repeat</button>
@@ -409,10 +411,13 @@ function parseCmd(t){t=" "+t.toLowerCase().replace(/[^a-z0-9 ]/g," ")+" ";
   if(has(/ (strong|two|2|too|to|good) /))return 2;
   if(has(/ (nailed|easy|one|1|won|perfect|knew it) /))return 1;
   return null}
+let activeRec=null;
+function killRec(){if(activeRec){const r=activeRec;activeRec=null;try{r.__fin&&r.__fin(null)}catch(e){}try{r.abort()}catch(e){}}}
 function listen(ms,tok){return new Promise(res=>{
   if(!SR||!S.mic||micState==="blocked"){res(null);return}
-  const r=new SR();r.lang="en-US";r.interimResults=true;r.maxAlternatives=3;r.continuous=false;
-  let done=false;const fin=v=>{if(done)return;done=true;try{r.abort()}catch(e){}clearTimeout(h);setListening(false);res(v)};
+  killRec();
+  const r=new SR();activeRec=r;r.lang="en-US";r.interimResults=true;r.maxAlternatives=3;r.continuous=false;
+  let done=false;const fin=v=>{if(done)return;done=true;if(activeRec===r)activeRec=null;try{r.abort()}catch(e){}clearTimeout(h);setListening(false);res(v)};r.__fin=fin;
   r.onresult=e=>{for(const res_ of e.results){for(const alt of res_){const c=parseCmd(alt.transcript);if(c!=null){micState="ok";fin(c);return}}}};
   r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"){micState="blocked";showMicNote()}fin(null)};
   r.onend=()=>fin(null);
@@ -423,9 +428,9 @@ function setListening(on){$("phaseWrap").classList.toggle("listening",on);if(on)
 const inFrame=(()=>{try{return window.self!==window.top}catch(e){return true}})();
 function showMicNote(){const n=$("micNote");
   if(micState==="unsupported"){n.textContent="This browser can't do speech recognition. Use the 1–5 buttons, or open the app in Safari or Chrome.";n.hidden=false}
-  else if(micState==="blocked"){n.textContent=inFrame?"The microphone is blocked inside the Claude page. Voice answers work when this same app is opened from its own web address — see Settings for how. Tap 1–5 for now.":"Microphone access is blocked for this site. On iPhone: Settings → Apps → Safari → Microphone → Allow (also check Settings → General → Keyboard → Enable Dictation), then reload and tap Voice answers again.";n.hidden=false;S.mic=false;saveS();syncMicBtn()}
+  else if(micState==="blocked"){n.textContent=inFrame?"The microphone is blocked inside the Claude page. Voice answers work when this same app is opened from its own web address — see Settings for how. Tap 1–5 for now.":"Microphone access is blocked for this site. On iPhone: Settings → Apps → Safari → Microphone → Allow (also check Settings → General → Keyboard → Enable Dictation), then reload and tap Start hands-free ride again.";n.hidden=false;S.mic=false;saveS();syncMicBtn()}
   else n.hidden=true}
-function syncMicBtn(){if(!running)$("play").textContent=S.mic?"▶ Start hands-free":(qi>0?"▶ Resume":"▶ Start ride");$("micBtn").setAttribute("aria-pressed",String(!!S.mic));$("micBtn").textContent=S.mic?"🎙 Voice ON":"🎙 Voice off"}
+function syncMicBtn(){$("hfBtn").hidden=running;if(!running&&!/Drill|New/.test($("play").textContent))$("play").textContent=qi>0&&qi<Q.length?"▶ Resume":"▶ Start";$("micBtn").setAttribute("aria-pressed",String(!!S.mic));$("micBtn").textContent=S.mic?"🎙 Voice ON":"🎙 Voice off"}
 $("micBtn").onclick=()=>{if(!SR){micState="unsupported";showMicNote();return}
   if(S.mic){S.mic=false;saveS();syncMicBtn();toast("Voice answers off");return}
   // start recognition inside the tap so the browser asks for the microphone now
@@ -521,11 +526,13 @@ async function loop(){
       if(qi>=Q.length){finish();break}
       await playCard(t);
       let ans=await getRating(t);
-      while(ans==="repeat"){await playCard(t);ans=await getRating(t)}
+      for(;;){
+        if(ans==="repeat"){await playCard(t);ans=await getRating(t);continue}
+        if(ans==="star"){const on=!(rec(current.w)||{}).s;toggleStar(current.w);renderCard(false);await say(on?"Starred. Now rate it.":"Unstarred. Now rate it.",t);ans=await getRating(t);continue}
+        break}
       if(ans==="pause"){stop();if(S.mic){await speakRaw("Paused. Say resume when you're ready.");resumeListener()}break}
       if(ans==="skip"){qi++;continue}
       if(ans==="back"){qi=Math.max(0,qi-1);continue}
-      if(ans==="star"){toggleStar(current.w);toast("Starred");ans=await getRating(t)}
       if(ans==="archive"){toggleArchive(current.w,true);await say("Archived.",t);qi++;continue}
       if(typeof ans==="number"){flash(ans);beep(ans<=2?"good":ans===3?"mid":"bad");applyRating(ans);if(S.mic)await say(String(ans),t);await sleep(250,t)}
     }
@@ -537,18 +544,33 @@ function applyRating(r){
   if(r===5&&n<2){Q.splice(Math.min(Q.length,qi+4),0,x);reinserts[x.w]=n+1}
   else if(r===4&&n<1){Q.splice(Math.min(Q.length,qi+9),0,x);reinserts[x.w]=n+1}
   qi++;renderCard(true)}
-function finish(){running=false;tickTime();phase("Done",false);$("play").textContent="▶ New ride";refreshAll();
+function finish(){running=false;tickTime();phase("Done",false);$("play").textContent="▶ New ride";$("hfBtn").hidden=false;refreshAll();
   const td=(P.days[today()]||{}).n||0;
   if(S.mic&&micState!=="blocked"){speakRaw(`Ride complete. ${td} words today. Say another for a new ride, or stop.`).then(async()=>{for(let i=0;i<3&&!running;i++){beep("listen");const v=await listen(7000,tok);if(running)return;if(v==="resume"){if(mode==="drill")mode="ride";buildRide();if(Q.length)start();else speakRaw("Nothing left due. Nice work.");return}if(v==="pause")break}keepAwake(false)})}
   else{speakRaw(`Ride complete. ${td} words today.`);keepAwake(false)}}
 let wake=null;async function keepAwake(on){try{if(on&&"wakeLock"in navigator)wake=await navigator.wakeLock.request("screen");else if(!on&&wake){await wake.release();wake=null}}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&running)keepAwake(true);if(document.visibilityState==="hidden")tickTime()});
 function tickTime(){if(rideStart){const d=P.days[today()]||(P.days[today()]={n:0,ms:0,r:[0,0,0,0,0]});d.ms+=Date.now()-rideStart;rideStart=running?Date.now():0;persist()}}
-function start(){unlockAudio();voicePaused=false;if(qi>=Q.length||!Q.length){if(mode==="drill"){toast("Drill finished");mode="ride"}buildRide();if(!Q.length){toast("Nothing due. Try a drill.");return}}
-  running=true;rideStart=Date.now();$("play").textContent="❚❚ Pause";keepAwake(true);loop()}
-function stop(){running=false;tok++;synth&&synth.cancel();if(awaiting){awaiting("stop");awaiting=null}$("rates").classList.remove("await");setListening(false);tickTime();phase("Paused",false);$("play").textContent="▶ Resume";keepAwake(false)}
+function start(){unlockAudio();voicePaused=false;killRec();if(qi>=Q.length||!Q.length){if(mode==="drill"){toast("Drill finished");mode="ride"}buildRide();if(!Q.length){toast("Nothing due. Try a drill.");return}}
+  running=true;rideStart=Date.now();$("play").textContent="❚❚ Pause";$("hfBtn").hidden=true;keepAwake(true);loop()}
+function stop(){running=false;tok++;killRec();synth&&synth.cancel();if(awaiting){awaiting("stop");awaiting=null}$("rates").classList.remove("await");setListening(false);tickTime();phase("Paused",false);$("play").textContent="▶ Resume";$("hfBtn").hidden=false;keepAwake(false)}
 $("play").onclick=()=>running?stop():start();
-function jump(d){const was=running;tok++;synth&&synth.cancel();if(awaiting){const a=awaiting;awaiting=null;a("stop")}qi=Math.max(0,Math.min(Q.length,qi+d));renderCard(true);if(was){running=true;loop()}else phase("Ready",false)}
+function handsFree(){
+  if(!SR){micState="unsupported";showMicNote();return}
+  unlockAudio();if(running)stop();synth&&synth.cancel();
+  if(micState==="blocked"&&inFrame){showMicNote();return}
+  // open the mic inside this tap so iPhone asks for permission, then start the ride
+  const r=new SR();r.lang="en-US";let ok=false,go=false;
+  const begin=()=>{if(go)return;go=true;try{r.abort()}catch(e){}
+    if(micState==="blocked")return;S.mic=true;micState="ok";saveS();syncMicBtn();$("micNote").hidden=true;
+    speakRaw("Hands-free on. After each definition, say a number, one to five.").then(()=>{if(!running)start()})};
+  r.onstart=()=>{ok=true;setTimeout(begin,300)};
+  r.onerror=e=>{if(e.error==="not-allowed"||e.error==="service-not-allowed"||e.error==="audio-capture"){micState="blocked";showMicNote()}else if(ok)begin()};
+  r.onend=()=>{if(ok)begin()};
+  try{r.start()}catch(e){micState="blocked";showMicNote()}
+}
+$("hfBtn").onclick=handsFree;
+function jump(d){const was=running;tok++;killRec();synth&&synth.cancel();if(awaiting){const a=awaiting;awaiting=null;a("stop")}qi=Math.max(0,Math.min(Q.length,qi+d));renderCard(true);if(was){running=true;loop()}else phase("Ready",false)}
 $("skip").onclick=()=>jump(1);$("back").onclick=()=>jump(-1);
 $("repeat").onclick=()=>{if(awaiting){const a=awaiting;awaiting=null;a("repeat")}else if(current){const was=running;tok++;synth&&synth.cancel();if(was){running=true;loop()}else{const t=++tok;playCard(t).catch(()=>{})}}};
 $("rates").onclick=e=>{const b=e.target.closest("button");if(!b||!current)return;const r=+b.dataset.r;
