@@ -80,6 +80,9 @@ button:disabled{opacity:.45;cursor:default}
 .rates [data-r="4"]{border-color:var(--r4)}.rates [data-r="4"] b{color:var(--r4)}
 .rates [data-r="5"]{border-color:var(--r5)}.rates [data-r="5"] b{color:var(--r5)}
 .rates.await button{animation:pulse 1.6s ease-in-out infinite}
+.rates button.picked{transform:scale(1.06);transition:transform .12s}
+.rates [data-r="1"].picked{background:var(--r1)}.rates [data-r="2"].picked{background:var(--r2)}.rates [data-r="3"].picked{background:var(--r3)}.rates [data-r="4"].picked{background:var(--r4)}.rates [data-r="5"].picked{background:var(--r5)}
+.rates button.picked b,.rates button.picked span{color:var(--panel)!important}
 @keyframes pulse{50%{background:var(--sunk)}}
 .tools{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px}
 .tools button{font-size:.88rem;min-height:44px;font-weight:500}
@@ -396,6 +399,7 @@ function parseCmd(t){t=" "+t.toLowerCase().replace(/[^a-z0-9 ]/g," ")+" ";
   if(has(/ (repeat|say (it|that) again|one more time|what) /))return "repeat";
   if(has(/ (skip|next|pass) /))return "skip";
   if(has(/ (back|previous|go back) /))return "back";
+  if(has(/ (another|resume|continue|start|play|keep going|lets go|go|yes|more) /))return "resume";
   if(has(/ (archive|retire) /))return "archive";
   if(has(/ (star|save|favorite) /))return "star";
   if(has(/ (pause|stop|hold on) /))return "pause";
@@ -421,11 +425,11 @@ function showMicNote(){const n=$("micNote");
   if(micState==="unsupported"){n.textContent="This browser can't do speech recognition. Use the 1–5 buttons, or open the app in Safari or Chrome.";n.hidden=false}
   else if(micState==="blocked"){n.textContent=inFrame?"The microphone is blocked inside the Claude page. Voice answers work when this same app is opened from its own web address — see Settings for how. Tap 1–5 for now.":"Microphone access is blocked for this site. On iPhone: Settings → Apps → Safari → Microphone → Allow (also check Settings → General → Keyboard → Enable Dictation), then reload and tap Voice answers again.";n.hidden=false;S.mic=false;saveS();syncMicBtn()}
   else n.hidden=true}
-function syncMicBtn(){$("micBtn").setAttribute("aria-pressed",String(!!S.mic));$("micBtn").textContent=S.mic?"🎙 Voice ON":"🎙 Voice off"}
+function syncMicBtn(){if(!running)$("play").textContent=S.mic?"▶ Start hands-free":(qi>0?"▶ Resume":"▶ Start ride");$("micBtn").setAttribute("aria-pressed",String(!!S.mic));$("micBtn").textContent=S.mic?"🎙 Voice ON":"🎙 Voice off"}
 $("micBtn").onclick=()=>{if(!SR){micState="unsupported";showMicNote();return}
   if(S.mic){S.mic=false;saveS();syncMicBtn();toast("Voice answers off");return}
   // start recognition inside the tap so the browser asks for the microphone now
-  if(running)stop();
+  if(running)stop();unlockAudio();
   synth&&synth.cancel();
   const r=new SR();r.lang="en-US";r.interimResults=true;r.maxAlternatives=3;let heard=false;
   const n=$("micNote");n.hidden=false;n.textContent="Mic check: say a number from 1 to 5…";
@@ -439,6 +443,16 @@ $("micBtn").onclick=()=>{if(!SR){micState="unsupported";showMicNote();return}
   try{r.start()}catch(e){micState="blocked";showMicNote();end()}
   setTimeout(()=>{try{r.stop()}catch(_){}},7000)};
 $("voiceHelp").textContent=inFrame?"Inside the Claude app the microphone is blocked, so voice answers only work from the app's own web address (for example a free GitHub Pages or Netlify link). Ask Claude to set that up.":(SR?"Voice answers are available here. Turn them on from the Ride tab.":"This browser doesn't support speech recognition. Try Safari on iPhone or Chrome on Android.");
+
+/* ---------- audio cues ---------- */
+let actx=null;function unlockAudio(){try{if(!actx){const C=window.AudioContext||window.webkitAudioContext;if(C)actx=new C()}if(actx&&actx.state==="suspended")actx.resume()}catch(e){}}
+function beep(kind){if(!actx)return;try{const seq={listen:[[880,.09]],good:[[660,.08],[990,.12]],mid:[[700,.12]],bad:[[520,.1],[390,.14]]}[kind]||[[700,.1]];let at=actx.currentTime+.01;
+  for(const [f,d] of seq){const o=actx.createOscillator(),g=actx.createGain();o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(0,at);g.gain.linearRampToValueAtTime(.18,at+.015);g.gain.exponentialRampToValueAtTime(.001,at+d);o.connect(g).connect(actx.destination);o.start(at);o.stop(at+d+.02);at+=d+.03}}catch(e){}}
+function flash(r){const b=document.querySelector(`#rates [data-r="${r}"]`);if(!b)return;b.classList.add("picked");setTimeout(()=>b.classList.remove("picked"),750)}
+let voicePaused=false;
+async function resumeListener(){voicePaused=true;let n=0;
+  while(voicePaused&&!running&&S.mic&&micState!=="blocked"){const v=await listen(8000,tok);if(!voicePaused||running)break;if(v==="resume"){voicePaused=false;start();return}if(++n%4===0)await speakRaw("Say resume when you're ready.")}
+  voicePaused=false}
 
 /* ---------- ride engine ---------- */
 let Q=[],qi=0,running=false,tok=0,mode="ride",drillLabel="",current=null,awaiting=null,reinserts={},cardDir="w2d",rideStart=0;
@@ -492,7 +506,10 @@ async function getRating(t){
   let autoH=null;const timers=[];
   if(+S.auto>0)timers.push(new Promise(res=>{autoH=setTimeout(()=>res("auto"),+S.auto*1000)}));
   let voiceP=new Promise(()=>{});
-  if(S.mic&&SR&&micState!=="blocked"){voiceP=(async()=>{for(let i=0;i<3&&t===tok&&!settled;i++){const v=await listen(6500,t);if(v!=null&&!settled)return v}return new Promise(()=>{})})().catch(()=>new Promise(()=>{}))}
+  if(S.mic&&SR&&micState!=="blocked"){voiceP=(async()=>{let miss=0;beep("listen");
+    while(t===tok&&!settled&&S.mic&&micState!=="blocked"){const v=await listen(6500,t);if(settled||t!==tok)break;
+      if(v!=null&&v!=="resume")return v;miss++;if(miss%2===0){await speakRaw("Say a number, one to five.");if(settled||t!==tok)break;beep("listen")}}
+    return new Promise(()=>{})})().catch(()=>new Promise(()=>{}))}
   const out=await Promise.race([tapP,voiceP,...timers]);
   settled=true;clearTimeout(autoH);awaiting=null;$("rates").classList.remove("await");
   if(t!==tok)throw "stop";
@@ -505,12 +522,12 @@ async function loop(){
       await playCard(t);
       let ans=await getRating(t);
       while(ans==="repeat"){await playCard(t);ans=await getRating(t)}
-      if(ans==="pause"){stop();break}
+      if(ans==="pause"){stop();if(S.mic){await speakRaw("Paused. Say resume when you're ready.");resumeListener()}break}
       if(ans==="skip"){qi++;continue}
       if(ans==="back"){qi=Math.max(0,qi-1);continue}
       if(ans==="star"){toggleStar(current.w);toast("Starred");ans=await getRating(t)}
       if(ans==="archive"){toggleArchive(current.w,true);await say("Archived.",t);qi++;continue}
-      if(typeof ans==="number"){applyRating(ans);await say(String(ans),t).catch(()=>{throw "stop"});}
+      if(typeof ans==="number"){flash(ans);beep(ans<=2?"good":ans===3?"mid":"bad");applyRating(ans);if(S.mic)await say(String(ans),t);await sleep(250,t)}
     }
   }catch(e){}
 }
@@ -520,11 +537,14 @@ function applyRating(r){
   if(r===5&&n<2){Q.splice(Math.min(Q.length,qi+4),0,x);reinserts[x.w]=n+1}
   else if(r===4&&n<1){Q.splice(Math.min(Q.length,qi+9),0,x);reinserts[x.w]=n+1}
   qi++;renderCard(true)}
-function finish(){running=false;tickTime();phase("Done",false);$("play").textContent="▶ New ride";speakRaw("Ride complete.");keepAwake(false);refreshAll()}
+function finish(){running=false;tickTime();phase("Done",false);$("play").textContent="▶ New ride";refreshAll();
+  const td=(P.days[today()]||{}).n||0;
+  if(S.mic&&micState!=="blocked"){speakRaw(`Ride complete. ${td} words today. Say another for a new ride, or stop.`).then(async()=>{for(let i=0;i<3&&!running;i++){beep("listen");const v=await listen(7000,tok);if(running)return;if(v==="resume"){if(mode==="drill")mode="ride";buildRide();if(Q.length)start();else speakRaw("Nothing left due. Nice work.");return}if(v==="pause")break}keepAwake(false)})}
+  else{speakRaw(`Ride complete. ${td} words today.`);keepAwake(false)}}
 let wake=null;async function keepAwake(on){try{if(on&&"wakeLock"in navigator)wake=await navigator.wakeLock.request("screen");else if(!on&&wake){await wake.release();wake=null}}catch(e){}}
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&running)keepAwake(true);if(document.visibilityState==="hidden")tickTime()});
 function tickTime(){if(rideStart){const d=P.days[today()]||(P.days[today()]={n:0,ms:0,r:[0,0,0,0,0]});d.ms+=Date.now()-rideStart;rideStart=running?Date.now():0;persist()}}
-function start(){if(qi>=Q.length||!Q.length){if(mode==="drill"){toast("Drill finished");mode="ride"}buildRide();if(!Q.length){toast("Nothing due. Try a drill.");return}}
+function start(){unlockAudio();voicePaused=false;if(qi>=Q.length||!Q.length){if(mode==="drill"){toast("Drill finished");mode="ride"}buildRide();if(!Q.length){toast("Nothing due. Try a drill.");return}}
   running=true;rideStart=Date.now();$("play").textContent="❚❚ Pause";keepAwake(true);loop()}
 function stop(){running=false;tok++;synth&&synth.cancel();if(awaiting){awaiting("stop");awaiting=null}$("rates").classList.remove("await");setListening(false);tickTime();phase("Paused",false);$("play").textContent="▶ Resume";keepAwake(false)}
 $("play").onclick=()=>running?stop():start();
