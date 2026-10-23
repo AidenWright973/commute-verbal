@@ -84,6 +84,7 @@ button:disabled{opacity:.45;cursor:default}
 .tools{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px}
 .tools button{font-size:.88rem;min-height:44px;font-weight:500}
 .tools button[aria-pressed="true"]{border-color:var(--signal);color:var(--signal)}
+#micBtn[aria-pressed="true"]{background:var(--r1);border-color:var(--r1);color:var(--panel);font-weight:700;box-shadow:0 0 0 3px color-mix(in srgb,var(--r1) 30%,transparent)}
 .scale{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:.72rem;color:var(--muted);text-align:center}
 
 /* drill */
@@ -420,7 +421,7 @@ function showMicNote(){const n=$("micNote");
   if(micState==="unsupported"){n.textContent="This browser can't do speech recognition. Use the 1–5 buttons, or open the app in Safari or Chrome.";n.hidden=false}
   else if(micState==="blocked"){n.textContent=inFrame?"The microphone is blocked inside the Claude page. Voice answers work when this same app is opened from its own web address — see Settings for how. Tap 1–5 for now.":"Microphone access is blocked for this site. On iPhone: Settings → Apps → Safari → Microphone → Allow (also check Settings → General → Keyboard → Enable Dictation), then reload and tap Voice answers again.";n.hidden=false;S.mic=false;saveS();syncMicBtn()}
   else n.hidden=true}
-function syncMicBtn(){$("micBtn").setAttribute("aria-pressed",String(!!S.mic));$("micBtn").textContent=S.mic?"🎙 Voice on":"🎙 Voice answers"}
+function syncMicBtn(){$("micBtn").setAttribute("aria-pressed",String(!!S.mic));$("micBtn").textContent=S.mic?"🎙 Voice ON":"🎙 Voice off"}
 $("micBtn").onclick=()=>{if(!SR){micState="unsupported";showMicNote();return}
   if(S.mic){S.mic=false;saveS();syncMicBtn();toast("Voice answers off");return}
   // start recognition inside the tap so the browser asks for the microphone now
