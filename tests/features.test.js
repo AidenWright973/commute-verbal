@@ -1,0 +1,47 @@
+const {JSDOM}=require('jsdom');
+const html=require('fs').readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
+const dom=new JSDOM(html,{url:"https://aidenwright973.github.io/commute-verbal/",runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){
+  w.scrollTo=()=>{};w.SpeechSynthesisUtterance=function(t){this.text=t};
+  w.speechSynthesis={getVoices:()=>[],cancel(){},speak(u){setTimeout(()=>u.onend&&u.onend(),2)}};
+  w.navigator.clipboard={writeText:async()=>{}};
+  // pretend the user already had v2 progress (migration test)
+  w.localStorage.setItem("cv2_progress",JSON.stringify({v:2,w:{abate:{r:2,h:"52",due:Date.now()+5*864e5,iv:8,ef:2.5,n:2,a:0,s:0,t:Date.now()-864e5},abet:{r:4,h:"4",due:Date.now()+864e5,iv:1,ef:2.3,n:0,a:0,s:1,t:Date.now()-864e5}},days:{}}));}});
+const w=dom.window,d=w.document,$=id=>d.getElementById(id),q=s=>d.querySelector(s);
+const P=()=>JSON.parse(w.localStorage.getItem("cv2_progress"));
+const out=[];const ok=(n,c,x)=>out.push((c?"PASS ":"FAIL ")+n+(c?"":"  → "+x));
+setTimeout(async()=>{
+  ok("v2 progress migrated (strong word → review)",P().w.abate.gr===1,JSON.stringify(P().w.abate));
+  ok("v2 weak word stays in daily rotation",P().w.abet.gr===0&&P().w.abet.s===1,JSON.stringify(P().w.abet));
+  ok("plan shows 15 new",$("pNew").textContent==="15",$("pNew").textContent);
+  ok("intro shows first time",!$("intro").hidden);$("introX").click();ok("intro dismisses",$("intro").hidden);
+  const w1=$("word").textContent;q('#rates [data-r="5"]').click();
+  ok("tap rating advances",$("word").textContent!==w1);
+  ok("blank word due again in ~10 min",P().w[w1].due-Date.now()<11*60000&&P().w[w1].gr===0);
+  q('#rates [data-r="1"]').click();q('#rates [data-r="2"]').click();
+  ok("plan ring moves",$("ringTxt").textContent!=="0%",$("ringTxt").textContent);
+  $("starBtn").click();ok("star toggles",$("starBtn").textContent.includes("Starred"));
+  q('[data-tab=words]').click();ok("words list shows all",$("lCount").textContent.startsWith("1,112"),$("lCount").textContent);
+  $("q").value="obsequ";$("q").dispatchEvent(new w.Event("input"));ok("search",$("lCount").textContent==="1 word");
+  q("#list .item>button").click();ok("row expands",!!q("#list .detail"));
+  q('#list .mini [data-r="2"]').click();ok("rate from list",P().w.obsequious.r===2);
+  [...q("#list .acts").children][2].click();ok("archive from list",P().w.obsequious.a===1);
+  $("q").value="";$("q").dispatchEvent(new w.Event("input"));
+  q('#lFilter [data-v="archived"]').click();ok("archived filter",$("lCount").textContent==="1 word",$("lCount").textContent);
+  q('#lFilter [data-v="learning"]').click();ok("weak-list filter",/^[1-9]/.test($("lCount").textContent),$("lCount").textContent);
+  q('#lSort').value="next";q('#lSort').dispatchEvent(new w.Event("change"));ok("coming-up sort",$("list").children.length>0);
+  q('[data-tab=practice]').click();ok("quick practice tiles",d.querySelectorAll("#quick button").length===5);
+  ok("status chips",d.querySelectorAll("#fStatus button").length===9);ok("38 sets",d.querySelectorAll("#setGrid button").length===38);
+  $("fStart").click();ok("practice loads on Today",!q('[data-view=today]').hidden&&!$("banner").hidden,$("bannerText").textContent);
+  ok("start button says practice",$("hfTxt").textContent.includes("practice"),$("hfTxt").textContent);
+  $("bannerBtn").click();ok("end practice → plan",$("banner").hidden&&!$("hfTxt").textContent.includes("practice"));
+  q('[data-tab=progress]').click();ok("progress today count",$("sToday").textContent==="4",$("sToday").textContent);
+  ok("pipeline legend",$("pipeLegend").textContent.includes("Learning"));ok("forecast 7 bars",d.querySelectorAll("#fc div").length===7);
+  $("exportBtn").click();await new Promise(r=>setTimeout(r,30));const code=$("ioBox").value;ok("backup code",code.length>50);
+  q('[data-tab=settings]').click();$("resetBtn").click();$("resetConfirm").click();ok("reset",Object.keys(P().w).length===0);
+  q('[data-tab=progress]').click();$("ioBox").value=code;$("ioBox").hidden=false;$("importBtn").click();ok("restore",Object.keys(P().w).length>=5,Object.keys(P().w).length);
+  q('[data-tab=settings]').click();q('[data-set="newDay"] [data-v="0"]').click();q('[data-tab=today]').click();ok("0 new/day respected",$("pNew").textContent==="0",$("pNew").textContent);
+  q('[data-set="weakCap"] [data-v="9999"]').click();q('[data-set="newDay"] [data-v="20"]').click();q('[data-tab=today]').click();ok("new/day setting",+$("pNew").textContent>0,$("pNew").textContent);
+  $("rate2").value="0.7";$("rate2").dispatchEvent(new w.Event("input"));ok("speed slider",JSON.parse(w.localStorage.getItem("cv2_settings")).rate===0.7&&$("rate1").value==="0.7");
+  const kd=new w.KeyboardEvent("keydown",{key:"3",bubbles:true});const before=P().days[Object.keys(P().days).sort().pop()].n;d.dispatchEvent(kd);
+  ok("keyboard 1–5",P().days[Object.keys(P().days).sort().pop()].n===before+1);
+  console.log(out.join("\n"));process.exit(0)},300);
